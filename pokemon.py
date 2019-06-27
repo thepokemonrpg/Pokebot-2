@@ -3,7 +3,7 @@ import pokepy
 import random
 
 client = pokepy.V2Client()
-damageTypeModifiers: {
+damageTypeModifiers = {
     "normal": {
         "ghost": 0,
         "rock": 0.5,
@@ -216,7 +216,7 @@ class DamageModifier:
         return 1
 
     def get_move_damage(self, power, attack_stat, level, move_type, opponent_type, opponent_defence):
-        modifier = self.get_critical_modifier(self) * self.get_type_modifier(opponent_type) * self.get_stab_modifier(move_type)
+        modifier = self.get_critical_modifier() * self.get_type_modifier(opponent_type) * self.get_stab_modifier(move_type)
         damage = ((((2*level/5) * power * attack_stat) / 50) * (attack_stat/opponent_defence) + 2)
         damage = damage * modifier
         return damage
@@ -224,12 +224,29 @@ class DamageModifier:
 
 class Pokemon:
     def __init__(self, **kwargs):
-        if kwargs.get("name") is str:
+        if kwargs.get("name") and kwargs.get("name") is str:
             self.pokemon = client.get_pokemon(kwargs.get("name"))
-        elif kwargs.get("id") is int:
+        elif kwargs.get("id") and isinstance(kwargs.get("id"), int):
             self.pokemon = client.get_pokemon(kwargs.get("id"))
         else:
             raise BadArgumentError("Invalid arguments passed on")
+
+        self.real = False
+        self.level = 0
+        self.usermoves = []
+        self.owner = ""
+
+        if kwargs.get("real"):
+            self.real = True
+
+        if kwargs.get("level"):
+            self.level = kwargs.get("level")
+
+        if kwargs.get("moves"):
+            self.usermoves = kwargs.get("moves")
+
+        if kwargs.get("owner"):
+            self.owner = kwargs.get("owner")
 
         self.stats = []
         statistics = self.pokemon.stats
@@ -249,10 +266,18 @@ class Pokemon:
 
         self.abilities = self.pokemon.abilities
 
+    def is_trained_owner(self):
+        return self.real
+
     def get_name(self):
         return self.pokemon.name
 
+    def get_id(self):
+        return self.pokemon.game_indices[0].game_index
+
     def get_moves(self):
+        if len(self.usermoves) > 0:
+            return self.usermoves
         return self.moves
 
     def get_base_stats(self):
@@ -264,7 +289,7 @@ class Pokemon:
         stats_length = len(self.pokemon.stats)
         increase_in_stat = level * (1/50)
         for i in range(stats_length):
-            self.stats.append({statistics[i].stat.name: (statistics[i].base_stat + increase_in_stat)})
+            self.stats.append({self.pokemon.stats[i].stat.name: (self.pokemon.stats[i].base_stat + increase_in_stat)})
 
         return new_statistics
 
@@ -273,3 +298,21 @@ class Pokemon:
 
     def get_potential_abilities(self):
         return self.abilities
+
+    def get_starting_moves(self):
+        moves = []
+
+        current_moves = self.get_moves()
+
+        for i in current_moves:
+            if len(moves) == 4:
+                break
+
+            for version in i.version_group_details:
+                if version.version_group.name == "red-blue" and version.level_learned_at <= 1 and version.move_learn_method.name == "level-up":
+                    moves.append(i.move.name)
+
+        return moves
+
+    def get_level(self):
+        return self.level

@@ -2,7 +2,9 @@ import sqlite3
 import database
 import time
 from pokeconfig import PokeConfig
-
+from pokemon import Pokemon
+import traceback
+from pprint import pprint
 
 class Player:
 	def __init__(self, uid):
@@ -13,10 +15,11 @@ class Player:
 
 		if not self.is_profile_setup():
 			try:
-				cursor.execute('''INSERT INTO playerData(playerID, gold, rewardsEpoch) VALUES(?,?,?,?)''', (self.uID, PokeConfig.startingGold, 0, 0))
+				cursor.execute('''INSERT INTO playerData(playerID, gold, rewardsEpoch, startRewardsObtained) VALUES(?,?,?,?)''', (self.uID, PokeConfig.startingGold, 0, 0))
 				connection.commit()
 			except:
 				print("Error setting up player, ID: " + uid)
+				traceback.print_exc()
 
 			connection.close()
 
@@ -117,3 +120,24 @@ class Player:
 		connection.commit()
 
 		connection.close()
+
+	def add_pokemon(self, pokemon_id, level, moves, bonus):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''INSERT INTO pokemon(pokemonIdentifier, level, owner, moves, bonus) VALUES(?,?,?,?,?)''', (pokemon_id, level, self.uID, moves, bonus))
+		connection.commit()
+
+	def get_pokemon_list(self):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''SELECT * FROM pokemon WHERE owner = ?''', (self.uID,))
+		rows = cursor.fetchall()
+		connection.close()
+
+		poke_obj = []
+
+		for r in rows:
+			pokemon = Pokemon(id=r[1], level=r[2], owner=r[3], moves=r[4], real=True)
+			poke_obj.append(pokemon)
+
+		return poke_obj
