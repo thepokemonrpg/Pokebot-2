@@ -8,7 +8,7 @@ class Pokeball(Item):
         Item.__init__(self, **kwargs)
 
     def calc_chance(self):
-        if random.randint(0,100) < 50:
+        if random.randint(0, 100) < 50:
             print("catches")
         else:
             print("doesn't catch")
