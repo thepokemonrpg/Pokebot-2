@@ -149,12 +149,15 @@ class Player:
 		rows = cursor.fetchone()
 		connection.close()
 
-		pprint(len(rows) != 1)
+		if rows is None:
+			return False
 
-		return len(rows) != 1
+		pprint(rows)
+
+		return True
 
 	def get_item_amount(self, name):
-		has_item = self.does_have_item()
+		has_item = self.does_have_item(name)
 
 		if not has_item:
 			return 0
@@ -165,7 +168,7 @@ class Player:
 		rows = cursor.fetchone()
 		connection.close()
 
-		return rows[0][4]
+		return rows[4]
 
 	def add_item(self, name, desc, uses=1):
 		has_item = self.does_have_item(name)
@@ -174,9 +177,9 @@ class Player:
 		cursor = connection.cursor()
 
 		if has_item:
-			cursor.execute('''UPDATE items SET itemAmt = ? WHERE owner = ? AND itemName = ?''', (self.uID, name, desc, uses))
+			cursor.execute('''UPDATE items SET itemAmt = ? WHERE owner = ? AND itemName = ?''', (self.get_item_amount(name) + uses, self.uID, name))
 		else:
-			cursor.execute('''INSERT INTO items(owner, itemName, itemDesc, itemAmt)) VALUES(?,?,?,?)''', (self.uID, name, desc, self.get_item_amount() + uses))
+			cursor.execute('''INSERT INTO items(owner, itemName, itemDesc, itemAmt) VALUES(?,?,?,?)''', (self.uID, name, desc, uses))
 		connection.commit()
 
 		has_item = self.does_have_item(name)
