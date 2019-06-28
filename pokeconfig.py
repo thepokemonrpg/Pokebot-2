@@ -7,7 +7,6 @@ class PokeConfig:
     lostStatsMultiplierPerMinute = 2  # Every minute X stats will be removed. Make it 0 if you want to disable this feature
     shopItems = [
         {
-            "id": 0,
             "name": "Normal Pokeball",
             "cost": 100,
             "category": "pokeball",
@@ -15,7 +14,6 @@ class PokeConfig:
             "description": "You have a 30% chance to catch a pokemon when you use this item!"
         },
         {
-            "id": 1,
             "name": "Super Pokeball",
             "cost": 500,
             "category": "pokeball",
