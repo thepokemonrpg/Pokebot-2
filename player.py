@@ -141,3 +141,42 @@ class Player:
 			poke_obj.append(pokemon)
 
 		return poke_obj
+
+	def does_have_item(self, name):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''SELECT * FROM items WHERE owner = ?, itemName = ?''', (self.uID, name))
+		rows = cursor.fetchone()
+		connection.close()
+
+		pprint(len(rows) != 1)
+
+		return len(rows) != 1
+
+	def get_item_amount(self, name):
+		has_item = self.does_have_item()
+
+		if not has_item:
+			return 0
+
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''SELECT * FROM items WHERE owner = ? AND itemName = ?''', (self.uID, name))
+		rows = cursor.fetchone()
+		connection.close()
+
+		return rows[0][4]
+
+	def add_item(self, name, desc, uses=1):
+		has_item = self.does_have_item(name)
+
+		connection = database.get_connection()
+		cursor = connection.cursor()
+
+		if has_item:
+			cursor.execute('''UPDATE items SET itemAmt = ? WHERE owner = ? AND itemName = ?''', (self.uID, name, desc, uses))
+		else:
+			cursor.execute('''INSERT INTO items(owner, itemName, itemDesc, itemAmt)) VALUES(?,?,?,?)''', (self.uID, name, desc, self.get_item_amount() + uses))
+		connection.commit()
+
+		has_item = self.does_have_item(name)
