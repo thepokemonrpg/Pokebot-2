@@ -1,318 +1,182 @@
+import sqlite3
+import database
+import time
+from pokeconfig import PokeConfig
+from pokemon import Pokemon
+import traceback
 from pprint import pprint
-import pokepy
-import random
 
-client = pokepy.V2Client()
-damageTypeModifiers = {
-    "normal": {
-        "ghost": 0,
-        "rock": 0.5,
-        "steel": 0.5
-    },
+class Player:
+	def __init__(self, uid):
+		self.uID = uid
 
-    "fighting": {
-        "normal": 2,
-        "flying": 0.5,
-        "poison": 0.5,
-        "rock": 2,
-        "bug": 0.5,
-        "ghost": 0,
-        "psychic": 0.5,
-        "steel": 2,
-        "ice": 2,
-        "dark": 2,
-        "fairy": 0.5
-    },
+		connection = database.get_connection()
+		cursor = connection.cursor()
 
-    "flying": {
-        "fighting": 2,
-        "rock": 0.5,
-        "bug": 2,
-        "steel": 0.5,
-        "grass": 2,
-        "electric": 0.5
-    },
+		if not self.is_profile_setup():
+			try:
+				cursor.execute('''INSERT INTO playerData(playerID, gold, rewardsEpoch, startRewardsObtained) VALUES(?,?,?,?)''', (self.uID, PokeConfig.startingGold, 0, 0))
+				connection.commit()
+			except:
+				print("Error setting up player, ID: " + uid)
+				traceback.print_exc()
 
-    "poison": {
-        "poison": 0.5,
-        "ground": 0.5,
-        "rock": 0.5,
-        "ghost": 0.5,
-        "steel": 0,
-        "grass": 2,
-        "fairy": 2
-    },
+			connection.close()
 
-    "ground": {
-        "flying": 0,
-        "poison": 2,
-        "rock": 2,
-        "bug": 0.5,
-        "steel": 2,
-        "fire": 2,
-        "grass": 0.5,
-        "fairy": 2
-    },
+	def is_profile_setup(self):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''SELECT gold FROM playerData WHERE playerID = ?''', (self.uID,))
+		rows = cursor.fetchone()
+		connection.close()
 
-    "rock": {
-        "fighting": 0.5,
-        "flying": 2,
-        "ground": 0.5,
-        "bug": 2,
-        "steel": 0.5,
-        "fire": 2,
-        "ice": 2
-    },
+		try:
+			if not isinstance(rows[0], int):
+				return False
+		except:
+			return False
 
-    "bug": {
-        "fighting": 0.5,
-        "flying": 0.5,
-        "poison": 0.5,
-        "ghost": 0.5,
-        "steel": 0.5,
-        "fire": 0.5,
-        "grass": 2,
-        "psychic": 2,
-        "dark": 2,
-        "fairy": 0.5
-    },
+		return True
 
-    "ghost": {
-        "normal": 0,
-        "ghost": 2,
-        "psychic": 2,
-        "dark": 0.5
-    },
+	def set_coins(self, gold):
+		connection = database.get_connection()
+		cursor = connection.cursor()
 
-    "steel": {
-        "rock": 2,
-        "steel": 0.5,
-        "fire": 0.5,
-        "water": 0.5,
-        "electric": 0.5,
-        "ice": 2,
-        "fairy": 2
-    },
+		try:
+			with connection:
+				cursor.execute('''INSERT INTO playerData(playerID, gold, rewardsEpoch, startRewardsObtained) VALUES(?,?,?,?)''', (self.uID, PokeConfig.startingGold + gold, 0, 0))
+				connection.commit()
+		except sqlite3.IntegrityError:
+			cursor.execute('''UPDATE playerData SET gold = ? WHERE playerID = ? ''', (gold, self.uID))
+			connection.commit()
 
-    "fire": {
-        "rock": 0.5,
-        "bug": 2,
-        "steel": 2,
-        "fire": 0.5,
-        "water": 0.5,
-        "grass": 2,
-        "ice": 2,
-        "dragon": 0.5
-    },
+		connection.close()
 
-    "water": {
-        "ground": 2,
-        "rock": 2,
-        "fire": 2,
-        "water": 0.5,
-        "grass": 0.5,
-        "dragon": 0.5
-    },
+	def get_coins(self):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''SELECT gold FROM playerData WHERE playerID = ?''', (self.uID,))
+		rows = cursor.fetchone()
+		connection.close()
 
-    "grass": {
-        "flying": 0.5,
-        "poison": 0.5,
-        "ground": 2,
-        "rock": 2,
-        "bug": 0.5,
-        "steel": 0.5,
-        "fire": 0.5,
-        "water": 2,
-        "grass": 0.5,
-        "dragon": 0.5
-    },
+		try:
+			if not isinstance(rows[0], int):
+				return 0
+		except:
+			return 0
 
-    "electric": {
-        "flying": 2,
-        "ground": 0,
-        "water": 2,
-        "grass": 0.5,
-        "electric": 0.5,
-        "dragon": 0.5
-    },
+		return rows[0]
 
-    "psychic": {
-        "fighting": 2,
-        "poison": 2,
-        "steel": 0.5,
-        "psychic": 0.5,
-        "dark": 0
-    },
+	def get_reward(self):
+		return PokeConfig.plrReward
 
-    "ice": {
-        "flying": 2,
-        "ground": 2,
-        "steel": 0.5,
-        "fire": 0.5,
-        "water": 0.5,
-        "grass": 2,
-        "ice": 0.5,
-        "dragon": 2
-    },
+	def get_reward_timer(self):
+		return PokeConfig.rewardsTimer
 
-    "dragon": {
-        "steel": 0.5,
-        "ice": 2,
-        "fairy": 0
-    },
+	def set_reward_timestamp(self):
+		connection = database.get_connection()
+		cursor = connection.cursor()
 
-    "dark": {
-        "fighting": 0.5,
-        "ghost": 2,
-        "psychic": 2,
-        "dark": 0.5,
-        "fairy": 0.5
-    },
+		cursor.execute('''UPDATE playerData SET rewardsEpoch = ? WHERE playerID = ? ''', (int(time.time()), self.uID))
+		connection.commit()
 
-    "fairy": {
-        "fighting": 2,
-        "poison": 0.5,
-        "steel": 0.5,
-        "fire": 0.5,
-        "dragon": 2,
-        "dark": 2
-    }
-}
+		connection.close()
 
+	def get_rewards_epoch(self):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''SELECT rewardsEpoch FROM playerData WHERE playerID = ?''', (self.uID,))
+		rows = cursor.fetchone()
+		connection.close()
 
-class BadArgumentError(Exception):
-    pass
+		if not isinstance(rows[0], int):
+			return 0
 
+		return rows[0]
 
-class DamageModifier:
-    def __init__(self, **kwargs):
-        if kwargs.get("type") is str and kwargs.get("type") in damageTypeModifiers:
-            self.type = kwargs.get("type")
-        else:
-            raise BadArgumentError("Invalid type")
+	def has_player_started(self):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''SELECT startRewardsObtained FROM playerData WHERE playerID = ?''', (self.uID,))
+		rows = cursor.fetchone()
+		connection.close()
 
-        self.criticalModifier = True
-        self.modifiers = damageTypeModifiers.get(kwargs.get("type"))
+		try:
+			if not isinstance(rows[0], int):
+				return False
+		except:
+			return False
 
-        if kwargs.get("disableCritical"):
-            self.criticalModifier = False
+		if rows[0] == 0:
+			return False
 
-    def get_type_modifier(self, another_type):
-        damage = 1
+		return True
 
-        if another_type in self.modifiers:
-            return self.modifiers.get(another_type)
+	def set_player_started(self):
+		connection = database.get_connection()
+		cursor = connection.cursor()
 
-        return damage
+		cursor.execute('''UPDATE playerData SET startRewardsObtained = ? WHERE playerID = ? ''', (1, self.uID))
+		connection.commit()
 
-    def get_critical_modifier(self):
-        if not self.criticalModifier:
-            return 1
-        return round(random.randint(217, 255) / 255)
+		connection.close()
 
-    def get_stab_modifier(self, move_type):  # STAB = Same Type Attack Bonus, where in attack type is same as pokemon type
-        if move_type == self.type:
-            return 1.5
-        return 1
+	def add_pokemon(self, pokemon_id, level, moves, bonus):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''INSERT INTO pokemon(pokemonIdentifier, level, owner, moves, bonus) VALUES(?,?,?,?,?)''', (pokemon_id, level, self.uID, moves, bonus))
+		connection.commit()
 
-    def get_move_damage(self, power, attack_stat, level, move_type, opponent_type, opponent_defence):
-        modifier = self.get_critical_modifier() * self.get_type_modifier(opponent_type) * self.get_stab_modifier(move_type)
-        damage = ((((2*level/5) * power * attack_stat) / 50) * (attack_stat/opponent_defence) + 2)
-        damage = damage * modifier
-        return damage
+	def get_pokemon_list(self):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''SELECT * FROM pokemon WHERE owner = ?''', (self.uID,))
+		rows = cursor.fetchall()
+		connection.close()
 
+		poke_obj = []
 
-class Pokemon:
-    def __init__(self, **kwargs):
-        if kwargs.get("name") and kwargs.get("name") is str:
-            self.pokemon = client.get_pokemon(kwargs.get("name"))
-        elif kwargs.get("id") and isinstance(kwargs.get("id"), int):
-            self.pokemon = client.get_pokemon(kwargs.get("id"))
-        else:
-            raise BadArgumentError("Invalid arguments passed on")
+		for r in rows:
+			pokemon = Pokemon(id=r[1], level=r[2], owner=r[3], moves=r[4], real=True)
+			poke_obj.append(pokemon)
 
-        self.real = False
-        self.level = 0
-        self.usermoves = []
-        self.owner = ""
+		return poke_obj
 
-        if kwargs.get("real"):
-            self.real = True
+	def does_have_item(self, name):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''SELECT * FROM items WHERE owner = ? AND itemName = ?''', (self.uID, name))
+		rows = cursor.fetchone()
+		connection.close()
 
-        if kwargs.get("level"):
-            self.level = kwargs.get("level")
+		pprint(len(rows) != 1)
 
-        if kwargs.get("moves"):
-            self.usermoves = kwargs.get("moves")
+		return len(rows) != 1
 
-        if kwargs.get("owner"):
-            self.owner = kwargs.get("owner")
+	def get_item_amount(self, name):
+		has_item = self.does_have_item()
 
-        self.stats = []
-        statistics = self.pokemon.stats
-        stats_length = len(statistics)
-        for i in range(stats_length):
-            self.stats.append(statistics[i].stat.name)
+		if not has_item:
+			return 0
 
-        self.moves = self.pokemon.moves
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''SELECT * FROM items WHERE owner = ? AND itemName = ?''', (self.uID, name))
+		rows = cursor.fetchone()
+		connection.close()
 
-        self.stats = self.pokemon.stats
+		return rows[0][4]
 
-        self.cost = 0
+	def add_item(self, name, desc, uses=1):
+		has_item = self.does_have_item(name)
 
-        for i in range(stats_length):
-            self.cost += statistics[i].base_stat
-        self.cost = self.cost * 2
+		connection = database.get_connection()
+		cursor = connection.cursor()
 
-        self.abilities = self.pokemon.abilities
+		if has_item:
+			cursor.execute('''UPDATE items SET itemAmt = ? WHERE owner = ? AND itemName = ?''', (self.uID, name, desc, uses))
+		else:
+			cursor.execute('''INSERT INTO items(owner, itemName, itemDesc, itemAmt)) VALUES(?,?,?,?)''', (self.uID, name, desc, self.get_item_amount() + uses))
+		connection.commit()
 
-    def is_trained_owner(self):
-        return self.real
-
-    def get_name(self):
-        return self.pokemon.name
-
-    def get_id(self):
-        return self.pokemon.game_indices[0].game_index
-
-    def get_moves(self):
-        if len(self.usermoves) > 0:
-            return self.usermoves
-        return self.moves
-
-    def get_base_stats(self):
-        return self.stats
-
-    def get_stats(self, level):
-        new_statistics = []
-
-        stats_length = len(self.pokemon.stats)
-        increase_in_stat = level * (1/50)
-        for i in range(stats_length):
-            self.stats.append({self.pokemon.stats[i].stat.name: (self.pokemon.stats[i].base_stat + increase_in_stat)})
-
-        return new_statistics
-
-    def get_cost(self):
-        return self.cost
-
-    def get_potential_abilities(self):
-        return self.abilities
-
-    def get_starting_moves(self):
-        moves = []
-
-        current_moves = self.get_moves()
-
-        for i in current_moves:
-            if len(moves) == 4:
-                break
-
-            for version in i.version_group_details:
-                if version.version_group.name == "red-blue" and version.level_learned_at <= 1 and version.move_learn_method.name == "level-up":
-                    moves.append(i.move.name)
-
-        return moves
-
-    def get_level(self):
-        return self.level
+		has_item = self.does_have_item(name)
