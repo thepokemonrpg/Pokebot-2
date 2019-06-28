@@ -5,12 +5,17 @@ from pokeconfig import PokeConfig
 from pokemon import Pokemon
 from discord.ext import commands
 import datetime
-import pokemon
+import random
+import asyncio
 from pprint import pprint
-from discord.ext.commands import CommandNotFound
+from FightEmbedGUI import FightEmbedGUI
 
 bot = commands.Bot(command_prefix='!', description='Pokemon')
 
+class Storage:
+	inCombat = []
+	vsWho = {}
+	timers = {}
 
 async def get_name(author):
 	name = str(author)
@@ -82,11 +87,29 @@ async def shop(ctx):
 	await bot.send_message(ctx.message.channel, embed=embed)
 	msg = await bot.wait_for_message(timeout=15, author=ctx.message.author, channel=ctx.message.channel, check=pokemon_shop_check)
 	if not (msg is None):
-		player.add_item("your mom", "is non existent", 3)
+		player_bal = player.get_coins()
+		selected_item = shop_items[int(msg.content) - 1]
+
+		if player_bal < selected_item["cost"]:
+			embed = discord.Embed(description="You do not have enough gold. You need **" + str(selected_item["cost"] - player_bal) + "g** more", colour=0xff0000)
+			embed.set_author(name=(await get_name(ctx.message.author)), icon_url=ctx.message.author.avatar_url)
+
+			await bot.send_message(ctx.message.channel, embed=embed)
+
+			return True
+
+		player.set_coins(player_bal - selected_item["cost"])
+		player.add_item(selected_item["name"], selected_item["description"], 1)
+
+		embed = discord.Embed(description="You successfully bought a **" + selected_item["name"] + "** for **" + str(selected_item["cost"]) + "g**.", colour=0x00ff00)
+		embed.set_author(name="Bought Notification", icon_url=ctx.message.author.avatar_url)
+
+		await bot.send_message(ctx.message.channel, embed=embed)
+
 
 def pokemon_starter_predicate_check(msg):
 	if not msg.content.isdigit():
-		return False;
+		return False
 
 	if int(msg.content) < 1:
 		return False
@@ -103,13 +126,13 @@ async def start(ctx):
 		embed.set_author(name=(await get_name(ctx.message.author)), icon_url=ctx.message.author.avatar_url)
 
 		await bot.send_message(ctx.message.channel, embed=embed)
-		return True;
+		return True
 
 	description = "Pokemon Trainee " + await get_name(ctx.message.author) + ", \n\n"
 	for i in range(len(PokeConfig.startingPokemon)):
 		poke = Pokemon(id=int(PokeConfig.startingPokemon[i]))
 		description = description + (str(i + 1) + ". " + ("**" + poke.get_name() + "**").title()) + "\n"
-	description = description + "\nType out a number within 15 seconds or you will timeout"
+	description = description + "\nType the number of the item listed above (e.g 1) to buy the item."
 
 	embed = discord.Embed(description=description, colour=0x00ff00)
 	embed.set_author(name="Choose a starter pokemon", icon_url=ctx.message.author.avatar_url)
@@ -152,13 +175,86 @@ async def pokemon(ctx):
 
 	await bot.send_message(ctx.message.channel, embed=embed)
 
-default_error_handler = bot.on_command_error
 
-@bot.event
-async def on_command_error(ctx, error):
-	if isinstance(error, CommandNotFound):
-		return
-	await default_error_handler(ctx, error)
+@bot.command(pass_context=True, aliases=['item'])
+async def items(ctx):
+	player = Player(ctx.message.author.id)
+
+	item_list = player.get_item_list()
+
+	if len(item_list) == 0:
+		embed = discord.Embed(description="You do not have any items currently. You can buy items at !shop.", colour=0xff0000)
+		embed.set_author(name=(await get_name(ctx.message.author) + "'s item list"), icon_url=ctx.message.author.avatar_url)
+		await bot.send_message(ctx.message.channel, embed=embed)
+		return True
+
+	description = "Your item list:\n\n"
+
+	for i in range(len(item_list)):
+		item = item_list[i]
+		description = description + (str(i + 1) + ". " + ("**" + item.get_name() + "**").title()) + " **" + str(item.get_amount()) + "x** (" + item.get_description() + ")\n"
+
+	embed = discord.Embed(description=description, colour=0xffff00)
+	embed.set_author(name=(await get_name(ctx.message.author) + "'s pokemon list"), icon_url=ctx.message.author.avatar_url)
+
+	await bot.send_message(ctx.message.channel, embed=embed)
+
+
+async def kill_player_combat():
+	await bot.wait_until_ready()
+
+	while not bot.is_closed:
+		pop_list = []
+
+		for key, value in Storage.timers.items():
+			if (time.time() - value) >= 15:
+				pop_list.append(key)
+				Storage.inCombat.remove(key)
+
+				if key in Storage.vsWho:
+					del Storage.vsWho[key]
+
+				player = Player(key.id)
+				goldLost = random.randint(5, 27)
+				player.set_coins(player.get_coins() - goldLost)
+				embed = discord.Embed(description="You lost your game due to not responding. You also lost **" + str(goldLost) + "g**.", colour=0xff0000)
+
+				embed.set_author(name=(await get_name(key)), icon_url=key.avatar_url)
+
+				try:
+					await bot.send_message(key, embed=embed)
+				except:
+					print("Exception")
+
+		for i in pop_list:
+			del Storage.timers[i]
+		await asyncio.sleep(10)
+
+@bot.command(pass_context=True)
+async def wild(ctx):
+	if ctx.message.author.id in Storage.inCombat:
+		embed = discord.Embed(description="You are currently in combat.", colour=0xff0000)
+		embed.set_author(name=(await get_name(ctx.message.author)), icon_url=ctx.message.author.avatar_url)
+		await bot.send_message(ctx.message.channel, embed=embed)
+		return False
+
+	player = Player(ctx.message.author.id)
+	level = 115
+	player_pokemon = Pokemon(name="Pikachu", real=True, level=level, owner=ctx.message.author.id, moves="tackle,quick_attack")
+	wild_pokemon = Pokemon(id=random.randint(1, 151), level=level + 10)
+	first_pokemon = wild_pokemon
+	first_move = "Wilderness"
+
+	if wild_pokemon.get_stat("speed", level) < player_pokemon.get_stat("speed", level):
+		first_pokemon = player_pokemon
+		first_move = ctx.message.author
+
+	embedGUI = FightEmbedGUI(challenger=ctx.message.author, firstMove=first_move, fpokemon=first_pokemon, opponent="Wilderness", wild=True, cpokemon=player_pokemon, opokemon=wild_pokemon)
+
+	Storage.inCombat.append(ctx.message.author)
+	Storage.timers.update({ctx.message.author: time.time()})
+	await bot.send_message(ctx.message.channel, embed=embedGUI.get_embed())
+
 
 @bot.event
 async def on_ready():
@@ -168,7 +264,7 @@ async def on_ready():
 	print("oAuth Link (Invite Link): " + discord.utils.oauth_url(bot.user.id))
 	print("-----------------------------------------------------")
 	await bot.change_presence(game=discord.Game(name="!", type=1))
-
+	bot.loop.create_task(kill_player_combat())
 
 @bot.event
 async def on_message(msg):
