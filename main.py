@@ -55,6 +55,35 @@ async def rewards(ctx):
 	await bot.send_message(ctx.message.channel, embed=embed)
 
 
+def pokemon_shop_check(msg):
+	if not msg.content.isdigit():
+		return False;
+
+	if int(msg.content) < 1:
+		return False
+
+	return int(msg.content) <= len(PokeConfig.shopItems)
+
+
+@bot.command(pass_context=True)
+async def shop(ctx):
+	player = Player(ctx.message.author.id)
+	shop_items = PokeConfig.shopItems
+
+	description = "Pokemon Trainee " + await get_name(ctx.message.author) + ", \n\n"
+	for i in range(len(shop_items)):
+		v = shop_items[i]
+		description = description + (str(i + 1) + ". " + ("**" + v["name"] + "**").title()) + ": **" + str(v["cost"]) + "g**\n"
+	description = description + "\nType out a number within 15 seconds or you will timeout"
+
+	embed = discord.Embed(description=description, colour=0x00ff00)
+	embed.set_author(name="Shop", icon_url=ctx.message.author.avatar_url)
+
+	await bot.send_message(ctx.message.channel, embed=embed)
+	msg = await bot.wait_for_message(timeout=15, author=ctx.message.author, channel=ctx.message.channel, check=pokemon_shop_check)
+	if not (msg is None):
+		player.add_item("your mom", "is non existent", 3)
+
 def pokemon_starter_predicate_check(msg):
 	if not msg.content.isdigit():
 		return False;
@@ -150,9 +179,6 @@ async def on_message(msg):
 		await bot.logout()
 		return True
 
-	plr = Player(msg.author.id)
-	plr.get_coins()
-	#  plr.set_coins(500)
 	await bot.process_commands(msg)
 	
 bot.run(PokeConfig.token)
