@@ -5,6 +5,7 @@ from pokeconfig import PokeConfig
 from pokemon import Pokemon
 import traceback
 from pprint import pprint
+from Item import Item
 
 class Player:
 	def __init__(self, uid):
@@ -182,4 +183,17 @@ class Player:
 			cursor.execute('''INSERT INTO items(owner, itemName, itemDesc, itemAmt) VALUES(?,?,?,?)''', (self.uID, name, desc, uses))
 		connection.commit()
 
-		has_item = self.does_have_item(name)
+	def get_item_list(self):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''SELECT * FROM items WHERE owner = ?''', (self.uID,))
+		rows = cursor.fetchall()
+		connection.close()
+
+		item_obj = []
+
+		for r in rows:
+			item = Item(name=r[2], description=r[3], amount=r[4])
+			item_obj.append(item)
+
+		return item_obj
