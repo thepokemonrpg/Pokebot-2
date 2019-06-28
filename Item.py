@@ -6,30 +6,22 @@ client = pokepy.V2Client()
 
 class Item:
     def __init__(self, **kwargs):
-        if kwargs.get("id").isdigit():
-            self.item = client.get_item(kwargs.get("item_id"))
-            self.name = self.item.name
-        else:
-            raise BadArgumentError("Invalid arguments passed on")
-
-        if kwargs.get("name") is str:
-            self.name = kwargs.get("item_name")
-
-        self.item_cost = self.item.cost
-        self.uses = False
+        self.cost = 0
         self.desc = ""
+        self.name = ""
+        self.amount = 1
 
-        if kwargs.get("cost"):
-            self.cost = kwargs.get("cost")
-
-        if kwargs.get("uses"):
-            self.uses = kwargs.get("uses")
+        if kwargs.get("amount"):
+            self.amount = kwargs.get("amount")
 
         if kwargs.get("description"):
             self.desc = kwargs.get("description")
 
-    def get_id(self):
-        return self.item.id
+        if kwargs.get("cost") and kwargs.get("cost").isdigit():
+            self.cost = int(kwargs.get("cost"))
+
+        if kwargs.get("name"):
+            self.name = kwargs.get("name")
 
     def get_name(self):
         return self.name
@@ -37,8 +29,8 @@ class Item:
     def get_cost(self):
         return self.cost
 
-    def get_use(self):
-        return self.uses
-
     def get_description(self):
         return self.desc
+
+    def get_amount(self):
+        return self.amount
