@@ -224,7 +224,7 @@ class DamageModifier:
 
 class Pokemon:
     def __init__(self, **kwargs):
-        if kwargs.get("name") and kwargs.get("name") is str:
+        if kwargs.get("name"):
             self.pokemon = client.get_pokemon(kwargs.get("name"))
         elif kwargs.get("id") and isinstance(kwargs.get("id"), int):
             self.pokemon = client.get_pokemon(kwargs.get("id"))
@@ -243,7 +243,12 @@ class Pokemon:
             self.level = kwargs.get("level")
 
         if kwargs.get("moves"):
-            self.usermoves = kwargs.get("moves")
+            currentmoves = kwargs.get("moves")
+
+            self.usermoves = currentmoves
+
+            if (type(currentmoves) is str):
+                self.usermoves = kwargs.get("moves").split(",")
 
         if kwargs.get("owner"):
             self.owner = kwargs.get("owner")
@@ -289,7 +294,10 @@ class Pokemon:
         stats_length = len(self.pokemon.stats)
         increase_in_stat = level * (1/50)
         for i in range(stats_length):
-            self.stats.append({self.pokemon.stats[i].stat.name: (self.pokemon.stats[i].base_stat + increase_in_stat)})
+            if self.pokemon.stats[i].stat.name == "hp":
+                new_statistics.append({self.pokemon.stats[i].stat.name: self.pokemon.stats[i].base_stat + (increase_in_stat * 100)})
+            else:
+                new_statistics.append({self.pokemon.stats[i].stat.name: (self.pokemon.stats[i].base_stat + increase_in_stat)})
 
         return new_statistics
 
@@ -302,17 +310,63 @@ class Pokemon:
     def get_starting_moves(self):
         moves = []
 
-        current_moves = self.get_moves()
+        current_moves = self.moves
 
         for i in current_moves:
-            if len(moves) == 4:
-                break
+            move = client.get_move(i)
+            if move.power:
+                if len(moves) == 4:
+                    break
 
-            for version in i.version_group_details:
-                if version.version_group.name == "red-blue" and version.level_learned_at <= 1 and version.move_learn_method.name == "level-up":
-                    moves.append(i.move.name)
+                for version in i.version_group_details:
+                    if (not i.move.name in moves) and version.version_group.name == "red-blue" and version.level_learned_at <= 1 and version.move_learn_method.name == "level-up":
+                        moves.append(i.move.name)
 
+        return moves
+
+    def get_wild_moves(self):
+        moves = []
+
+        current_moves = self.moves
+
+        for i in reversed(current_moves):
+            move = client.get_move(i)
+            if move.power:
+                if len(moves) == 4:
+                    break
+
+                for version in i.version_group_details:
+                    if (not i.move.name in moves) and version.version_group.name == "red-blue" and version.level_learned_at <= self.level and version.move_learn_method.name == "level-up":
+                        moves.append(i.move.name)
         return moves
 
     def get_level(self):
         return self.level
+
+    def get_beauty_hp(self, level=1):
+        hp = str(self.get_stat("hp", level))
+
+        return hp + "/" + hp
+
+    def get_stat(self, stat, level=1):
+        stats = self.get_stats(level)
+
+        for i in stats:
+            if stat in i:
+                return i[stat]
+
+        return ""
+
+    def get_beauty_moves(self):
+        moves = self.get_wild_moves()
+
+        if len(self.usermoves) > 0:
+            moves = self.usermoves
+
+        beauty_moves = ""
+
+        for i, v in enumerate(moves):
+            beauty_moves = beauty_moves + (chr(97 + i) + ". " + v.title() + "\n")
+
+        return beauty_moves
+
