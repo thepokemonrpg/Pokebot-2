@@ -1,3 +1,5 @@
+# UNUSED: COULDN'T FINISH IN TIME
+
 from Item import Item
 import time
 import pokeconfig
