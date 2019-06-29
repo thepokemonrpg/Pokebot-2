@@ -7,12 +7,10 @@ class Pokeball(Item):
         self.chance = 0
 
         if kwargs.get("chance"):
-            self.chance = kwargs.get("chance")
-
-        self.uses = self.is_successful()
+            self.chance = int(kwargs.get("chance"))
 
         Item.__init__(self, **kwargs)
 
     def is_successful(self):
-        return random.randint(0, 100) < self.chance
+        return random.randint(0, 100) <= self.chance
 
