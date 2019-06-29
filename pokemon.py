@@ -186,13 +186,16 @@ class BadArgumentError(Exception):
 
 class DamageModifier:
     def __init__(self, **kwargs):
-        if kwargs.get("type") is str and kwargs.get("type") in damageTypeModifiers:
+        if kwargs.get("type"):
             self.type = kwargs.get("type")
         else:
             raise BadArgumentError("Invalid type")
 
         self.criticalModifier = True
-        self.modifiers = damageTypeModifiers.get(kwargs.get("type"))
+        self.modifiers = []
+
+        for i in self.type:
+            self.modifiers.append(damageTypeModifiers.get(i))
 
         if kwargs.get("disableCritical"):
             self.criticalModifier = False
@@ -200,8 +203,9 @@ class DamageModifier:
     def get_type_modifier(self, another_type):
         damage = 1
 
-        if another_type in self.modifiers:
-            return self.modifiers.get(another_type)
+        for i in self.modifiers:
+            if another_type in i:
+                damage = damage + i.get(another_type)
 
         return damage
 
@@ -211,13 +215,29 @@ class DamageModifier:
         return round(random.randint(217, 255) / 255)
 
     def get_stab_modifier(self, move_type):  # STAB = Same Type Attack Bonus, where in attack type is same as pokemon type
-        if move_type == self.type:
+        if move_type in self.type:
             return 1.5
         return 1
 
-    def get_move_damage(self, power, attack_stat, level, move_type, opponent_type, opponent_defence):
-        modifier = self.get_critical_modifier() * self.get_type_modifier(opponent_type) * self.get_stab_modifier(move_type)
-        damage = ((((2*level/5) * power * attack_stat) / 50) * (attack_stat/opponent_defence) + 2)
+    def get_move_damage(self, power, attack_stat, level, move_type, opponent_types, opponent_defence, wild=False):
+        typeModifier = 1
+
+        for i in opponent_types:
+            typeModifier = typeModifier + self.get_type_modifier(i)
+
+        levelDmg = ((2 + ((2*level)/5)) * power * (attack_stat/opponent_defence))/50
+        modifier = self.get_critical_modifier() * typeModifier * self.get_stab_modifier(move_type)
+        damage = levelDmg + 2
+
+        if modifier > 2:
+            modifier = 2
+
+        if modifier < 0.5:
+            modifier = 0.5
+
+        if wild and level < 15:
+            modifier = 0.75
+
         damage = damage * modifier
         return damage
 
@@ -235,6 +255,14 @@ class Pokemon:
         self.level = 0
         self.usermoves = []
         self.owner = ""
+        self.uniqueID = 0
+        self.xp = 0
+
+        if kwargs.get("xp"):
+            self.xp = kwargs.get("xp")
+
+        if kwargs.get("unique"):
+            self.uniqueID = kwargs.get("unique")
 
         if kwargs.get("real"):
             self.real = True
@@ -247,7 +275,7 @@ class Pokemon:
 
             self.usermoves = currentmoves
 
-            if (type(currentmoves) is str):
+            if isinstance(currentmoves, str):
                 self.usermoves = kwargs.get("moves").split(",")
 
         if kwargs.get("owner"):
@@ -260,8 +288,11 @@ class Pokemon:
             self.stats.append(statistics[i].stat.name)
 
         self.moves = self.pokemon.moves
-
+        self.pokemonTypes = []
         self.stats = self.pokemon.stats
+
+        for i in self.pokemon.types:
+            self.pokemonTypes.append(i.type.name)
 
         self.cost = 0
 
@@ -270,6 +301,12 @@ class Pokemon:
         self.cost = self.cost * 2
 
         self.abilities = self.pokemon.abilities
+
+    def get_type(self):
+        return self.pokemonTypes
+
+    def get_unique_id(self):
+        return self.uniqueID
 
     def is_trained_owner(self):
         return self.real
@@ -288,11 +325,18 @@ class Pokemon:
     def get_base_stats(self):
         return self.stats
 
+    def get_move(self, move):
+        return client.get_move(move)
+
     def get_stats(self, level):
         new_statistics = []
 
         stats_length = len(self.pokemon.stats)
         increase_in_stat = level * (1/50)
+
+        if self.real:
+            increase_in_stat = increase_in_stat * 2
+
         for i in range(stats_length):
             if self.pokemon.stats[i].stat.name == "hp":
                 new_statistics.append({self.pokemon.stats[i].stat.name: self.pokemon.stats[i].base_stat + (increase_in_stat * 100)})
@@ -313,14 +357,12 @@ class Pokemon:
         current_moves = self.moves
 
         for i in current_moves:
-            move = client.get_move(i)
-            if move.power:
-                if len(moves) == 4:
-                    break
+            if len(moves) == 4:
+                 break
 
-                for version in i.version_group_details:
-                    if (not i.move.name in moves) and version.version_group.name == "red-blue" and version.level_learned_at <= 1 and version.move_learn_method.name == "level-up":
-                        moves.append(i.move.name)
+            for version in i.version_group_details:
+                if (not i.move.name in moves) and version.version_group.name == "red-blue" and version.level_learned_at <= 1 and version.move_learn_method.name == "level-up":
+                       moves.append(i.move.name)
 
         return moves
 
@@ -330,14 +372,24 @@ class Pokemon:
         current_moves = self.moves
 
         for i in reversed(current_moves):
-            move = client.get_move(i)
-            if move.power:
-                if len(moves) == 4:
-                    break
+            if len(moves) == 4:
+                break
 
-                for version in i.version_group_details:
-                    if (not i.move.name in moves) and version.version_group.name == "red-blue" and version.level_learned_at <= self.level and version.move_learn_method.name == "level-up":
-                        moves.append(i.move.name)
+            for version in i.version_group_details:
+                if (not i.move.name in moves) and version.version_group.name == "red-blue" and version.level_learned_at <= self.level and version.move_learn_method.name == "level-up":
+                    moves.append(i.move.name)
+        return moves
+
+    def get_new_moves(self, level=1):
+        moves = []
+
+        current_moves = self.moves
+
+        for i in reversed(current_moves):
+            for version in i.version_group_details:
+                if (not i.move.name in moves) and version.version_group.name == "red-blue" and version.level_learned_at == level and version.move_learn_method.name == "level-up":
+                    moves.append(i.move.name)
+
         return moves
 
     def get_level(self):
@@ -370,3 +422,8 @@ class Pokemon:
 
         return beauty_moves
 
+    def get_exp(self):
+        return self.xp
+
+    def get_exp_for_levelup(self):
+        return (20 * self.level) + 50
