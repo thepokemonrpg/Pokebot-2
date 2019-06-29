@@ -16,7 +16,7 @@ class Player:
 
 		if not self.is_profile_setup():
 			try:
-				cursor.execute('''INSERT INTO playerData(playerID, gold, rewardsEpoch, startRewardsObtained) VALUES(?,?,?,?)''', (self.uID, PokeConfig.startingGold, 0, 0))
+				cursor.execute('''INSERT INTO playerData(playerID, gold, rewardsEpoch, startRewardsObtained, equipPokemon) VALUES(?,?,?,?,?)''', (self.uID, PokeConfig.startingGold, 0, 0, 0))
 				connection.commit()
 			except:
 				print("Error setting up player, ID: " + uid)
@@ -45,7 +45,7 @@ class Player:
 
 		try:
 			with connection:
-				cursor.execute('''INSERT INTO playerData(playerID, gold, rewardsEpoch, startRewardsObtained) VALUES(?,?,?,?)''', (self.uID, PokeConfig.startingGold + gold, 0, 0))
+				cursor.execute('''INSERT INTO playerData(playerID, gold, rewardsEpoch, startRewardsObtained, equipPokemon) VALUES(?,?,?,?,?)''', (self.uID, PokeConfig.startingGold + gold, 0, 0, 0))
 				connection.commit()
 		except sqlite3.IntegrityError:
 			cursor.execute('''UPDATE playerData SET gold = ? WHERE playerID = ? ''', (gold, self.uID))
@@ -138,10 +138,91 @@ class Player:
 		poke_obj = []
 
 		for r in rows:
-			pokemon = Pokemon(id=r[1], level=r[2], owner=r[3], moves=r[4], real=True)
+			pokemon = Pokemon(unique=r[0], id=r[1], level=r[2], xp=r[3], owner=r[4], moves=r[5], real=True)
 			poke_obj.append(pokemon)
 
 		return poke_obj
+
+	def get_pokemon_id_list(self):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''SELECT * FROM pokemon WHERE owner = ?''', (self.uID,))
+		rows = cursor.fetchall()
+		connection.close()
+
+		id_s = []
+
+		for r in rows:
+			id_s.append(r[0])
+
+		return id_s
+
+	def get_equip_pokemon(self):
+		equip_id = self.get_equip()
+		poke_obj = self.get_pokemon_list()
+
+		for i in poke_obj:
+			if i.get_unique_id() == equip_id:
+				return i
+
+		return False
+
+	def set_moves(self, unique, moves):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+
+		cursor.execute('''UPDATE pokemon SET moves = ? WHERE pokemonID = ? ''', (moves, unique))
+		connection.commit()
+
+		connection.close()
+
+	def set_exp_pokemon(self, unique, xp):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+
+		cursor.execute('''UPDATE pokemon SET exp = ? WHERE pokemonID = ? ''', (xp, unique))
+		connection.commit()
+
+		connection.close()
+
+	def set_level_pokemon(self, unique, level):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+
+		cursor.execute('''UPDATE pokemon SET level = ? WHERE pokemonID = ? ''', (level, unique))
+		connection.commit()
+
+		connection.close()
+
+	def get_equip(self):
+		connection = database.get_connection()
+		cursor = connection.cursor()
+		cursor.execute('''SELECT equipPokemon FROM playerData WHERE playerID = ?''', (self.uID,))
+		rows = cursor.fetchone()
+		connection.close()
+
+		try:
+			if not isinstance(rows[0], int):
+				return 0
+		except:
+			return 0
+
+		return rows[0]
+
+	def set_equip(self, equip):
+		ids = self.get_pokemon_id_list()
+
+		if not (equip in ids):
+			return False
+
+		connection = database.get_connection()
+		cursor = connection.cursor()
+
+		cursor.execute('''UPDATE playerData SET equipPokemon = ? WHERE playerID = ? ''', (equip, self.uID))
+		connection.commit()
+
+		connection.close()
+		return True
 
 	def does_have_item(self, name):
 		connection = database.get_connection()
@@ -152,8 +233,6 @@ class Player:
 
 		if rows is None:
 			return False
-
-		pprint(rows)
 
 		return True
 
